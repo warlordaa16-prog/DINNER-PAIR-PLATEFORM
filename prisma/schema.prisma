@@ -1,0 +1,157 @@
+// Production PostgreSQL Prisma Schema for Supabase / Neon Deployment
+// Note: Local development and AI Studio runtime use embedded SQLite (src/server/db.ts)
+// with identical relational tables, foreign keys, unique constraints, and transactions.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum EventStatus {
+  OPEN
+  CLOSED
+  COMPLETED
+}
+
+enum AttendanceStatus {
+  CONFIRMED
+  PENDING
+  DECLINED
+}
+
+enum PairingMode {
+  MUTUAL
+  SECRET
+}
+
+enum BatchStatus {
+  DRAFT
+  CONFIRMED
+  LOCKED
+}
+
+enum AdminRole {
+  SUPER_ADMIN
+  ADMIN
+}
+
+model Event {
+  id                     Int            @id @default(autoincrement())
+  organizerName          String         @default("Manifest Association") @map("organizer_name")
+  eventName              String         @map("event_name")
+  eventDate              String         @map("event_date")
+  venue                  String
+  dressCode              String?        @map("dress_code")
+  giftBudget             String?        @map("gift_budget")
+  ticketInfo             String?        @map("ticket_info")
+  contactPhone           String?        @map("contact_phone")
+  registrationDeadline   String         @map("registration_deadline")
+  eventStatus            EventStatus    @default(OPEN) @map("event_status")
+  allowAttendanceUpdates Boolean        @default(true) @map("allow_attendance_updates")
+  googleFormId           String?        @map("google_form_id")
+  googleFormUrl          String?        @map("google_form_url")
+  createdAt              DateTime       @default(now()) @map("created_at")
+  updatedAt              DateTime       @updatedAt @map("updated_at")
+  participants           Participant[]
+  pairingBatches         PairingBatch[]
+  pairings               Pairing[]
+
+  @@map("events")
+}
+
+model Participant {
+  id                        Int              @id @default(autoincrement())
+  eventId                   Int              @map("event_id")
+  registrationReference     String           @unique @map("registration_reference")
+  fullName                  String           @map("full_name")
+  phoneNumber               String           @map("phone_number")
+  email                     String?
+  residence                 String
+  ticketCategory            String           @default("STUDENT") @map("ticket_category")
+  attendanceStatus          AttendanceStatus @default(PENDING) @map("attendance_status")
+  giftExchangeConsent       Boolean          @default(false) @map("gift_exchange_consent")
+  accessCodeHash            String           @map("access_code_hash")
+  verificationCodeHash      String?          @map("verification_code_hash")
+  verificationCodeExpiresAt DateTime?        @map("verification_code_expires_at")
+  source                    String           @default("WEB")
+  createdAt                 DateTime         @default(now()) @map("created_at")
+  updatedAt                 DateTime         @updatedAt @map("updated_at")
+
+  event           Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  givenPairings   Pairing[] @relation("GiverRelation")
+  receivedPairing Pairing[] @relation("RecipientRelation")
+
+  @@unique([eventId, phoneNumber])
+  @@index([eventId, attendanceStatus, giftExchangeConsent])
+  @@map("participants")
+}
+
+model PairingBatch {
+  id            Int         @id @default(autoincrement())
+  eventId       Int         @map("event_id")
+  pairingMode   PairingMode @map("pairing_mode")
+  totalEligible Int         @map("total_eligible")
+  totalPaired   Int         @map("total_paired")
+  totalQueued   Int         @default(0) @map("total_queued")
+  status        BatchStatus @default(DRAFT)
+  createdAt     DateTime    @default(now()) @map("created_at")
+  lockedAt      DateTime?   @map("locked_at")
+
+  event    Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  pairings Pairing[]
+
+  @@index([eventId, status])
+  @@map("pairing_batches")
+}
+
+model Pairing {
+  id                     Int         @id @default(autoincrement())
+  pairingBatchId         Int         @map("pairing_batch_id")
+  eventId                Int         @map("event_id")
+  giverParticipantId     Int         @map("giver_participant_id")
+  recipientParticipantId Int         @map("recipient_participant_id")
+  pairingMode            PairingMode @map("pairing_mode")
+  isLocked               Boolean     @default(false) @map("is_locked")
+  createdAt              DateTime    @default(now()) @map("created_at")
+  lockedAt               DateTime?   @map("locked_at")
+
+  batch     PairingBatch @relation(fields: [pairingBatchId], references: [id], onDelete: Cascade)
+  event     Event        @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  giver     Participant  @relation("GiverRelation", fields: [giverParticipantId], references: [id], onDelete: Cascade)
+  recipient Participant  @relation("RecipientRelation", fields: [recipientParticipantId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, giverParticipantId])
+  @@unique([eventId, recipientParticipantId])
+  @@map("pairings")
+}
+
+model Administrator {
+  id           Int        @id @default(autoincrement())
+  username     String     @unique
+  email        String     @unique
+  passwordHash String     @map("password_hash")
+  role         AdminRole  @default(ADMIN)
+  createdAt    DateTime   @default(now()) @map("created_at")
+  auditLogs    AuditLog[]
+
+  @@map("administrators")
+}
+
+model AuditLog {
+  id                 Int           @id @default(autoincrement())
+  administratorId    Int           @map("administrator_id")
+  administratorLabel String        @map("administrator_label")
+  action             String
+  affectedRecord     String        @map("affected_record")
+  details            String?
+  timestamp          DateTime      @default(now())
+
+  administrator Administrator @relation(fields: [administratorId], references: [id], onDelete: Cascade)
+
+  @@index([timestamp])
+  @@map("audit_logs")
+}
