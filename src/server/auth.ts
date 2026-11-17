@@ -60,7 +60,22 @@ export function parseCookies(req: Request): Record<string, string> {
   return result;
 }
 
-export function createAdminSession(adminId: number, res: Response): void {
+function isHttpsRequest(req: Request): boolean {
+  const proto = String(req.headers['x-forwarded-proto'] || '').toLowerCase();
+  return req.secure || proto.includes('https') || (process.env.APP_URL || '').startsWith('https://');
+}
+
+export function extractAdminToken(req: Request): string | null {
+  const authHeader = req.headers.authorization;
+  if (typeof authHeader === 'string' && authHeader.toLowerCase().startsWith('bearer ')) {
+    const bearer = authHeader.slice(7).trim();
+    if (bearer) return bearer;
+  }
+  const cookies = parseCookies(req);
+  return cookies[ADMIN_COOKIE_NAME] || null;
+}
+
+export function createAdminSession(adminId: number, req: Request, res: Response): string {
   const rawToken = crypto.randomBytes(32).toString('hex');
   const tokenHash = hashSha256(`${rawToken}:${SESSION_SECRET}`);
   const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 12).toISOString(); // 12h
@@ -73,29 +88,34 @@ export function createAdminSession(adminId: number, res: Response): void {
   // Clean up expired sessions opportunistically
   db.prepare(`DELETE FROM admin_sessions WHERE expires_at < datetime('now')`).run();
 
-  const isSecure = process.env.NODE_ENV === 'production' && (process.env.APP_URL || '').startsWith('https://');
+  const isHttps = isHttpsRequest(req);
   res.cookie(ADMIN_COOKIE_NAME, rawToken, {
     httpOnly: true,
-    sameSite: 'lax',
-    secure: isSecure,
+    sameSite: isHttps ? 'none' : 'lax',
+    secure: isHttps,
     maxAge: 1000 * 60 * 60 * 12,
     path: '/',
   });
+
+  return rawToken;
 }
 
 export function revokeAdminSession(req: Request, res: Response): void {
-  const cookies = parseCookies(req);
-  const rawToken = cookies[ADMIN_COOKIE_NAME];
+  const rawToken = extractAdminToken(req);
   if (rawToken) {
     const tokenHash = hashSha256(`${rawToken}:${SESSION_SECRET}`);
     db.prepare('DELETE FROM admin_sessions WHERE token_hash = ?').run(tokenHash);
   }
-  res.clearCookie(ADMIN_COOKIE_NAME, { path: '/' });
+  const isHttps = isHttpsRequest(req);
+  res.clearCookie(ADMIN_COOKIE_NAME, {
+    path: '/',
+    sameSite: isHttps ? 'none' : 'lax',
+    secure: isHttps,
+  });
 }
 
 export function getAuthenticatedAdmin(req: Request): AdminUserRecord | null {
-  const cookies = parseCookies(req);
-  const rawToken = cookies[ADMIN_COOKIE_NAME];
+  const rawToken = extractAdminToken(req);
   if (!rawToken) return null;
 
   const tokenHash = hashSha256(`${rawToken}:${SESSION_SECRET}`);

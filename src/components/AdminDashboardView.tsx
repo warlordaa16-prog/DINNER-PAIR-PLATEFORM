@@ -21,7 +21,7 @@ import {
   UserPlus,
   Users,
 } from 'lucide-react';
-import { apiRequest } from '../lib/api';
+import { apiRequest, downloadAuthenticatedFile, setAdminSessionToken } from '../lib/api';
 import { signInWithGoogleWorkspace, signOutGoogleWorkspace } from '../lib/firebase';
 import {
   AdminSettingsResponse,
@@ -198,10 +198,11 @@ export function AdminDashboardView({
     setLoginError(null);
     setLoginBusy(true);
     try {
-      const res = await apiRequest<{ admin: AdminUser }>('/api/admin/login', {
+      const res = await apiRequest<{ admin: AdminUser; sessionToken?: string }>('/api/admin/login', {
         method: 'POST',
         body: JSON.stringify({ identifier: identifier.trim(), password }),
       });
+      setAdminSessionToken(res.sessionToken || null);
       onAdminAuthenticated(res.admin);
     } catch (err: unknown) {
       setLoginError(err instanceof Error ? err.message : 'Invalid credentials.');
@@ -215,16 +216,29 @@ export function AdminDashboardView({
     setGoogleBusy(true);
     try {
       const { idToken } = await signInWithGoogleWorkspace();
-      const res = await apiRequest<{ admin: AdminUser }>('/api/admin/google-login', {
-        method: 'POST',
-        body: JSON.stringify({ idToken }),
-      });
+      const res = await apiRequest<{ admin: AdminUser; sessionToken?: string }>(
+        '/api/admin/google-login',
+        {
+          method: 'POST',
+          body: JSON.stringify({ idToken }),
+        }
+      );
+      setAdminSessionToken(res.sessionToken || null);
       onAdminAuthenticated(res.admin);
     } catch (err: unknown) {
       await signOutGoogleWorkspace().catch(() => {});
       setLoginError(err instanceof Error ? err.message : 'Google Sign-In failed.');
     } finally {
       setGoogleBusy(false);
+    }
+  };
+
+  const handleExportDownload = async (url: string, fallbackFilename: string) => {
+    setBannerError(null);
+    try {
+      await downloadAuthenticatedFile(url, fallbackFilename);
+    } catch (err: unknown) {
+      setBannerError(err instanceof Error ? err.message : 'Failed to download export.');
     }
   };
 
@@ -645,7 +659,7 @@ export function AdminDashboardView({
                 required
                 value={identifier}
                 onChange={(e) => setIdentifier(e.target.value)}
-                placeholder="admin"
+                placeholder="ahebwa"
                 className="mt-1.5 w-full rounded-lg border border-[#E5B84B]/30 bg-[#080604] px-3.5 py-2.5 text-sm text-white focus:border-[#E5B84B] focus:outline-none focus:ring-2 focus:ring-[#E5B84B]/30"
               />
             </div>
@@ -1572,20 +1586,32 @@ export function AdminDashboardView({
                     Registration Date.
                   </p>
                   <div className="flex flex-wrap gap-3">
-                    <a
-                      href="/api/admin/export/participants?format=csv"
-                      className="inline-flex items-center gap-1.5 rounded-lg bg-[#E5B84B] px-4 py-2 text-xs font-semibold text-[#0A0704] hover:bg-[#E5C158]"
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handleExportDownload(
+                          '/api/admin/export/participants?format=csv',
+                          'dinner-pair-participants.csv'
+                        )
+                      }
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-[#E5B84B] px-4 py-2 text-xs font-semibold text-[#0A0704] hover:bg-[#E5C158] cursor-pointer"
                     >
                       <Download className="h-3.5 w-3.5" />
                       Download CSV
-                    </a>
-                    <a
-                      href="/api/admin/export/participants?format=xls"
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-white/20 bg-white/5 px-4 py-2 text-xs font-semibold text-white hover:bg-white/10"
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handleExportDownload(
+                          '/api/admin/export/participants?format=xls',
+                          'dinner-pair-participants.xls'
+                        )
+                      }
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-white/20 bg-white/5 px-4 py-2 text-xs font-semibold text-white hover:bg-white/10 cursor-pointer"
                     >
                       <Download className="h-3.5 w-3.5" />
                       Download Excel (.xls)
-                    </a>
+                    </button>
                   </div>
                 </div>
 
@@ -1598,20 +1624,32 @@ export function AdminDashboardView({
                     pairing modes, lock timestamps, and contact numbers.
                   </p>
                   <div className="flex flex-wrap gap-3">
-                    <a
-                      href="/api/admin/export/pairings?format=csv"
-                      className="inline-flex items-center gap-1.5 rounded-lg bg-[#E5B84B] px-4 py-2 text-xs font-semibold text-[#0A0704] hover:bg-[#E5C158]"
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handleExportDownload(
+                          '/api/admin/export/pairings?format=csv',
+                          'dinner-pair-pairings.csv'
+                        )
+                      }
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-[#E5B84B] px-4 py-2 text-xs font-semibold text-[#0A0704] hover:bg-[#E5C158] cursor-pointer"
                     >
                       <Download className="h-3.5 w-3.5" />
                       Download CSV
-                    </a>
-                    <a
-                      href="/api/admin/export/pairings?format=xls"
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-white/20 bg-white/5 px-4 py-2 text-xs font-semibold text-white hover:bg-white/10"
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handleExportDownload(
+                          '/api/admin/export/pairings?format=xls',
+                          'dinner-pair-pairings.xls'
+                        )
+                      }
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-white/20 bg-white/5 px-4 py-2 text-xs font-semibold text-white hover:bg-white/10 cursor-pointer"
                     >
                       <Download className="h-3.5 w-3.5" />
                       Download Excel (.xls)
-                    </a>
+                    </button>
                   </div>
                 </div>
               </div>

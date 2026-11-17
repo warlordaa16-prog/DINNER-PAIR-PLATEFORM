@@ -568,7 +568,7 @@ apiRouter.post('/admin/login', authLimiter, (req, res) => {
       return;
     }
 
-    createAdminSession(admin.id, res);
+    const sessionToken = createAdminSession(admin.id, req, res);
     logAudit(
       { id: admin.id, username: admin.username, email: admin.email, role: admin.role },
       'ADMIN_LOGIN',
@@ -583,6 +583,7 @@ apiRouter.post('/admin/login', authLimiter, (req, res) => {
         email: admin.email,
         role: admin.role,
       },
+      sessionToken,
     });
   } catch (err) {
     console.error('Admin login error:', err);
@@ -623,10 +624,10 @@ apiRouter.post('/admin/google-login', authLimiter, async (req, res) => {
       return;
     }
 
-    createAdminSession(admin.id, res);
+    const sessionToken = createAdminSession(admin.id, req, res);
     logAudit(admin, 'ADMIN_GOOGLE_LOGIN', admin.email, 'Signed in via Google Workspace OAuth');
 
-    res.json({ admin });
+    res.json({ admin, sessionToken });
   } catch (err) {
     console.error('Google admin login error:', err);
     res.status(401).json({ error: 'Google sign-in verification failed.' });

@@ -78,7 +78,7 @@ npm install
 cp .env.example .env
 npm run dev
 ```
-Default bootstrap admin username: `admin` (password in `ADMIN_BOOTSTRAP_PASSWORD`, default `DinnerPair2026!`). Change immediately in **Admin Settings**.
+Configure `ADMIN_BOOTSTRAP_USERNAME`, `ADMIN_BOOTSTRAP_EMAIL`, and `ADMIN_BOOTSTRAP_PASSWORD` in `.env` before first boot, or sign in with your configured Super Admin account and manage credentials in **Admin Settings**.
 
 ## Production Build & Deployment
 

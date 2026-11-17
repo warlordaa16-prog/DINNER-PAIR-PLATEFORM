@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { apiRequest } from './lib/api';
+import { apiRequest, setAdminSessionToken } from './lib/api';
 import { initFirebaseAuthListener, signOutGoogleWorkspace } from './lib/firebase';
 import { AdminUser, PublicEventResponse } from './types';
 import { ActiveRoute, TopNav } from './components/TopNav';
@@ -64,6 +64,7 @@ export default function App() {
 
   const handleAdminLogout = async () => {
     await apiRequest('/api/admin/logout', { method: 'POST' }).catch(() => {});
+    setAdminSessionToken(null);
     await signOutGoogleWorkspace().catch(() => {});
     setAdmin(null);
   };

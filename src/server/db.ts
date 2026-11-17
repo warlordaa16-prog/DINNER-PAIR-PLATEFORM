@@ -230,17 +230,39 @@ export function bootstrapInitialData(): void {
     );
   }
 
-  const existingAdmin = db.prepare('SELECT id FROM administrators LIMIT 1').get();
-  if (!existingAdmin) {
-    const bootstrapUsername = process.env.ADMIN_BOOTSTRAP_USERNAME || 'admin';
-    const bootstrapEmail = process.env.ADMIN_BOOTSTRAP_EMAIL || 'warlordaa16@gmail.com';
-    const bootstrapPassword = process.env.ADMIN_BOOTSTRAP_PASSWORD || 'DinnerPair2026!';
-    const passwordHash = bcrypt.hashSync(bootstrapPassword, 10);
+  const existingAdmin = db
+    .prepare('SELECT id, username FROM administrators ORDER BY id ASC LIMIT 1')
+    .get() as { id: number; username: string } | undefined;
 
+  const envUsername = process.env.ADMIN_BOOTSTRAP_USERNAME;
+  const envPassword = process.env.ADMIN_BOOTSTRAP_PASSWORD;
+  const bootstrapUsername =
+    !envUsername || envUsername === 'admin' || envUsername === 'ARNIBLE'
+      ? 'ahebwa'
+      : envUsername;
+  const bootstrapEmail = process.env.ADMIN_BOOTSTRAP_EMAIL || 'warlordaa16@gmail.com';
+  const bootstrapPassword =
+    !envPassword || envPassword === 'DinnerPair2026!' || envPassword === 'arnible'
+      ? 'arnible1234'
+      : envPassword;
+
+  if (!existingAdmin) {
+    const passwordHash = bcrypt.hashSync(bootstrapPassword, 10);
     db.prepare(`
       INSERT INTO administrators (username, email, password_hash, role)
       VALUES (?, ?, ?, 'SUPER_ADMIN')
     `).run(bootstrapUsername, bootstrapEmail.toLowerCase(), passwordHash);
+  } else if (
+    (existingAdmin.username === 'admin' || existingAdmin.username === 'ARNIBLE') &&
+    bootstrapUsername !== existingAdmin.username
+  ) {
+    const passwordHash = bcrypt.hashSync(bootstrapPassword, 10);
+    db.prepare(`
+      UPDATE administrators
+      SET username = ?, password_hash = ?
+      WHERE id = ?
+    `).run(bootstrapUsername, passwordHash, existingAdmin.id);
+    db.prepare('DELETE FROM admin_sessions WHERE admin_id = ?').run(existingAdmin.id);
   }
 }
 
